@@ -1,4 +1,4 @@
-# Alejandro Garay — AI Solutions Architect 
+# Alejandro Garay — Applied AI Engineer 
 
 **I design, ship, and evaluate end‑to‑end AI systems** with a focus on NLP: retrieval‑augmented generation (RAG), agentic workflows, evaluation harnesses, and production patterns at individual scale. This repo is the **entry point** to my portfolio: code, diagrams, and evidence.
 
@@ -8,7 +8,7 @@
 
 ## At a glance
 
-* **Primary vector:** AI/ML **Solutions Architect** (NLP‑heavy: RAG, agents, finetuning/evals)
+* **Primary vector:** AI/ML **Applied Engineer** (NLP | LLM-based Systems)
 * **Differentiator:** symbolic‑linguistic rigor + production patterns (pipelines, orchestration, testing, monitoring) rather than demo‑only prototypes
 * **Background:** Linguistics/Philosophy/Translation → AI/NLP (retrieval‑first, auditable systems)
 
