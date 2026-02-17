@@ -1,31 +1,31 @@
-# Alejandro Garay — AI Solutions Architect 
+# Alejandro Garay — AI Engineer (NLP / RAG / Agentic Systems)
 
-**I design, ship, and evaluate end‑to‑end AI systems** with a focus on NLP: retrieval‑augmented generation (RAG), agentic workflows, evaluation harnesses, and production patterns at individual scale. This repo is the **entry point** to my portfolio: code, diagrams, and evidence.
+**I design, build, and evaluate end‑to‑end LLM‑based systems** — retrieval‑augmented generation, agentic workflows, semantic search, evaluation harnesses, and production‑grade serving. This repo is the **entry point** to my portfolio: code, architecture, and evidence.
 
-**Last updated:** 2025‑12-01
+**Last updated:** 2026‑02‑16
 
 ---
 
 ## At a glance
 
-* **Primary vector:** AI/ML **Solutions Architect** (NLP‑heavy: RAG, agents, finetuning/evals)
-* **Differentiator:** symbolic‑linguistic rigor + production patterns (pipelines, orchestration, testing, monitoring) rather than demo‑only prototypes
-* **Background:** Linguistics/Philosophy/Translation → AI/NLP (retrieval‑first, auditable systems)
+* **Primary vector:** AI/NLP **Engineer** — end‑to‑end LLM systems (RAG, agents, semantic search, classification, evals)
+* **Differentiator:** symbolic‑linguistic rigor + production patterns (pipelines, orchestration, testing, observability) — not demo‑only prototypes
+* **Background:** Linguistics / Translation → AI/NLP — retrieval‑first, auditable systems with evaluation you can trust
 
 
 ---
 
 ## Hiring signals (pattern → evidence)
 
-| Real‑world pattern                             | What I built                      | Evidence                                                             | First file to open                                                 |
-| ---------------------------------------------- | --------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Ingestion → Train → Evaluate → Serve → Monitor | **Model Training Pipeline (MTP)** | CI badge, MLflow runs, deterministic seeds, latency & cost snapshots | `mtp/README.md` → `examples/train_run_example.py`                        |
-| RAG with retrieval quality gates               | **Retail Copilot**       | recall@k, precision@k, answer faithfulness, context‑utilization      | `retail-copilot/docs/SOW_Dossier.pdf`                    |
-| Post‑hoc guardrails/verification               | **Agentic Reviewer**              | hallucination checks, citation verification, rubric‑based scoring    | `agentic-reviewer/README.md` → `demo.py (ipynb coming soon)`        |
-| Productionized text classification             | **Privacy Case Classifier (PCC)** | F1/accuracy with data slices; confusion matrix; error analysis       | `pcc/README.md` → `notebooks/model_analysis.ipynb`                       |
-| Observability for LLM APIs                     | **Simple Model API (SMA)**        | Prometheus metrics (RPS, P50/P95), structured logs, k6 load test     | `simple-model-api/README.md` → `Makefile`                     |
-| Embedding analysis & migration                 | **Embedding Mapper**              | pairwise shifts, trust‑region plots, retrieval deltas                | `embedding-mapper/README.md` → `examples/compare_embeddings.ipynb` |
-| NL→SQL with safety & tenancy                   | **Retail Copilot**                | Intent taxonomy, SQL templates, validation rules, golden‑set evals   | `retail-copilot/docs/dossier.pdf` → `catalog/intents.yaml`        |
+| Real‑world pattern                             | What I built                          | Evidence                                                               | First file to open                                                       |
+| ---------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Local‑first LLM ingestion + semantic search    | **SnR QuickCapture**                  | Neural parsing, hybrid SQLite+FAISS, deterministic normalizer, 99 tests | `snr-qc/README.md`                                                      |
+| Signal accumulation + LLM narrative synthesis  | **Quality Intelligence (QI)**         | Feature engineering, rolling stats, Pydantic‑validated LLM output       | `qi/README.md`                                                           |
+| Ingestion → Train → Evaluate → Serve → Monitor | **Model Training Pipeline (MTP)**     | Intelligent dataset monitoring, GCS model registry, hyperparameter opt  | `mtp/README.md`                                                          |
+| NL→SQL with safety & multi‑tenancy            | **Retail Copilot**                    | Intent taxonomy, SQL templates, validation rules, golden‑set evals      | `retail-copilot/README.md` → `SOW_Dossier.md`                           |
+| Post‑hoc guardrails / semantic auditing        | **Agentic Reviewer**                  | LLM verdict+reasoning loop, prompt‑injection detection, audit logging   | `agentic-reviewer/README.md` → `demo.py`                                |
+| Productionized text classification             | **Privacy Case Classifier (PCC)**     | Live BigQuery pipeline, Looker dashboard, GCS model ingestion           | `pcc/README.md`                                                          |
+| Observability for LLM APIs                     | **Simple Model API (SMA)**            | Prometheus metrics (RPS, P50/P95), structured logs, Docker              | `simple-model-apil/README.md` → `Makefile`                              |
 
 ---
 
@@ -33,39 +33,44 @@
 
 ```mermaid
 flowchart LR
-  subgraph Data Layer
+  subgraph Capture ["Capture & Ingestion"]
+    QC[SnR QuickCapture<br/>local LLM + FAISS]
     SRC[Raw corpora / CSV / APIs]
-    FEAT[Feature/Embedding Store]
   end
 
-  subgraph Build & Train
-    EDP[EDP - Enterprise Data Pipeline]
-    MTP[MTP - Model Training Pipeline]
-    REG[Model Registry]
+  subgraph Personal ["Personal Intelligence"]
+    QI[QI – Quality Intelligence<br/>CLI + LLM synthesis]
   end
 
-  subgraph Serving & Apps
+  subgraph Build ["Build & Train"]
+    MTP[MTP – Model Training Pipeline]
+    REG[Model Registry / GCS]
+  end
+
+  subgraph Serving ["Serving & Apps"]
     SMA[Simple Model API]
-    RAG[RAG Service]
-    PCC[PCC Classifier]
-    AR[Agentic Reviewer]
+    RC[Retail Copilot<br/>NL→SQL + guardrails]
+    PCC[PCC Classifier<br/>BigQuery + Looker]
+    AR[Agentic Reviewer<br/>semantic auditing]
   end
 
-  subgraph Observability & Eval
+  subgraph Obs ["Observability & Eval"]
     EVAL[Eval Harness]
-    LOGS[Logs/Metrics: Prometheus/Grafana]
+    LOGS[Prometheus / structured logs]
   end
 
-  SRC --> EDP --> MTP --> REG --> SMA
-  FEAT <--> RAG
-  PCC --> SMA
+  QC -- notes --> QI
+  SRC --> MTP --> REG --> SMA
+  SRC --> PCC
+  PCC --> LOGS
   SMA --> LOGS
-  RAG --> LOGS
+  RC --> LOGS
   SMA --> AR
-  RAG --> AR
+  RC --> AR
   MTP --> EVAL
-  RAG --> EVAL
+  RC --> EVAL
 ```
+
 ---
 
 ## Evaluation (RAG/LLM + systems)
@@ -107,19 +112,35 @@ make up-metrics   # Grafana on http://localhost:3000 (admin/admin locally)
 
 ## Featured projects
 
-### 1) Retail Copilot PoC → RAG MVP 
+### 1) SnR QuickCapture — Local‑First Note Capture with Neural Parsing
+
+* **Problem**: capture thoughts instantly from anywhere on the desktop and turn them into semantically searchable, tagged knowledge — entirely offline.
+* **Pattern**: global‑hotkey launcher → FastAPI "brain" → deterministic normalizer (skips LLM when confidence ≥ 0.7) → Ollama neural parser → hybrid SQLite + FAISS storage.
+* **Stack**: Python 3.11+, FastAPI, Ollama (`qwen3:0.6b`), SentenceTransformers (`all-MiniLM-L6-v2`), SQLite (WAL), FAISS, PyQt6, Prometheus.
+* **Evidence**: 99 normalization tests, 6‑layer reliability model ("never lose a note"), offline fallback + dead‑letter queue, drift detector, observability modules.
+* **Start here**: `snr-qc/README.md`
+
+### 2) QI — Quality Intelligence (Personal Development CLI)
+
+* **Problem**: accumulate daily micro‑observations into computable signals and narrative reports over 52 weeks — under 2 min/day friction.
+* **Pattern**: Capture (DCI + SnR QC import) → Heuristic event classifier → Feature engine (rolling stats, deltas, streaks, trends) → Deterministic weekly/monthly reports → optional LLM narrative synthesis via Ollama.
+* **Stack**: Python 3.11+, Typer, Rich, Pydantic v2, SQLite, httpx, Ollama.
+* **Evidence**: Pydantic‑validated LLM output contract, `llm_runs` observability table (timing, tokens, validation), schema‑versioned migrations, graceful degradation on LLM failure.
+* **Integration**: consumes SnR QuickCapture notes via direct DB import (`qi import-snr-db`), reuses QC's parsed metadata to avoid redundant LLM calls.
+* **Start here**: `qi/README.md`
+
+### 3) Retail Copilot — NL→SQL with Safety & Multi‑Tenancy
 
 * **Problem**: convert natural language queries into validated SQL + VizSpec JSON over BigQuery with safe multi‑tenant execution.
 * **Pattern**: NL→intent→slots→template→validator chain; spec‑first architecture with PoC→MVP→multi‑tenant evolution path.
-* **Implementation**: 35+ page architecture dossier; planner JSON, SQL templates, validation rules, tenant isolation (RLS/CLS, per‑tenant datasets/budgets), golden‑set eval, promotion gates.
-* **Evidence**: Intent taxonomy, glossary, SQL policies, router/planner prompts, test scaffolds, runbook, monitoring dashboards, SLOs (latency, cost, faithfulness), canary rollout specs.
-* **Start here**: `retail-copilot/docs/dossier.pdf` → `catalog/intents.yaml` → `prompts/planner-retail-v2.md`
-* **Status**: Architecture/spec delivered — 2025
+* **Implementation**: 35+ page architecture dossier; planner JSON, SQL templates, validation rules, tenant isolation (RLS/CLS), golden‑set eval, promotion gates. OSS demo: modular monolith (core/interfaces/adapters/ui) with DuckDB simulating BigQuery + Gemini adapter.
+* **Evidence**: Intent taxonomy, SQL policies, router/planner prompts, test scaffolds, monitoring dashboards, SLOs.
+* **Start here**: `retail-copilot/README.md` → `SOW_Dossier.md`
 * **Repo**: PoC [repo](https://github.com/naaas94/retail-copilot-gcp) to back SOW
 
 #### Architecture diagrams
 
-**System context (at a glance)**
+**System context**
 
 ```mermaid
 graph TD
@@ -178,7 +199,7 @@ graph TD
   class APIGW,API,ORCH,LLM,PIPE,MATCH,BQ,AUDIT,CATALOG,VALID,POLICY,ASM,VIZ,LOOKER,LOGS,MON,ERR,TRACE node;
 ```
 
-**Data lineage (from NL to Viz)**
+**Data lineage (NL to Viz)**
 
 ```mermaid
 graph LR
@@ -192,38 +213,37 @@ graph LR
   X --> U[User traceability]
 ```
 
-### 2) PCC — Privacy Case Classifier
+### 4) Agentic Reviewer — Semantic Auditing for Classification
 
-* **Problem**: classify privacy requests/cases into workflow buckets (GDPR/CCPA compliance).
-* **Pattern**: supervised text classification + error analysis + data slices; policy‑to‑pipeline translation.
-* **Implementation**: `scikit-learn`/Transformers (MiniLM), Flyte orchestration, BigQuery, Docker, MLflow runs.
-* **Evidence**: macro‑F1 on fixtures; slice metrics (by entity/type); confusion matrix; regulatory constraint mapping.
-* **Start here**: `pcc/notebooks/pcc_demo.ipynb`
+* **Problem**: audit text classification predictions through semantic evaluation, corrections, and traceable explanations.
+* **Pattern**: unified multi‑task LLM agent (evaluate → propose → reason) in a single call, with circuit breaker, LRU caching, and prompt‑injection detection.
+* **Stack**: Python 3.11+, FastAPI, Ollama (Mistral), SQLite audit log, Pydantic.
+* **Evidence**: REST API with review/metrics/security/drift endpoints, security layer (sanitization, rate limiting), full audit trail, RAG edition planned.
+* **Start here**: `agentic-reviewer/README.md` → `demo.py`
 
-### 3) MTP — Model Training Pipeline
+### 5) PCC — Privacy Case Classifier
 
-* **Problem**: reproducible training with experiment tracking & registries.
-* **Pattern**: `MLflow` + deterministic training + pinned deps + structured configs.
-* **Implementation**: Makefile targets (`make train/eval/register`), CI, Docker multi‑stage.
-* **Evidence**: MLflow artifacts, metrics tables, model in `registry/`.
-* **Start here**: `mtp/examples/minimal_run.py`
+* **Problem**: classify customer support messages into privacy intent categories (GDPR/CCPA compliance).
+* **Pattern**: supervised text classification (MiniLM + TF‑IDF embeddings, 584‑dim) → BigQuery orchestration → Looker dashboard → GCS model lifecycle.
+* **Stack**: BigQuery, scikit‑learn, MiniLM, Docker, GCS, Looker.
+* **Evidence**: live production BigQuery tables with daily inference, Looker dashboard ([link](https://lookerstudio.google.com/reporting/9cb78e63-f5a4-4c5b-95b2-3056171628a6/page/SuJRF)), automatic GCS model ingestion with version management, 95%+ confidence scores.
+* **Start here**: `pcc/README.md`
 
-### 4) SMA — Simple Model API
+### 6) MTP — Model Training Pipeline
+
+* **Problem**: reproducible training with experiment tracking, model registries, and conditional retraining.
+* **Pattern**: intelligent dataset monitoring (only trains on new data) → SMOTE balancing → hyperparameter optimization → GCS model versioning → registry tracking.
+* **Stack**: scikit‑learn, GCS, YAML config, Kubernetes job templates.
+* **Evidence**: model registry CLI, GCS versioned artifacts, random‑search optimization, dataset date tracking.
+* **Start here**: `mtp/README.md`
+
+### 7) SMA — Simple Model API
 
 * **Problem**: serve models with SLAs and visibility.
-* **Pattern**: FastAPI + Prometheus + k6 load test + JSON logs.
-* **Implementation**: `docker-compose up`, `/metrics` endpoint, request IDs, middleware timing.
-* **Evidence**: P50/P95 latency charts; RPS under load; error rates.
-* **Start here**: `simple-model-api/README.md` → `make loadtest`
-
----
-
-## More projects
-
-* **RAG Service** — retrieval + rerank + prompt templates + eval harness (`recall@k`, faithfulness). Built for Spotify internal knowledge search with transformer embeddings + FAISS, freshness policies.
-* **Agentic Reviewer** — post‑hoc auditing loop (citation checks, rubric scores, red‑team prompts). Symbolic‑LLM hybrid for systematic agent performance evaluation.
-* **Embedding Mapper** — compare embedding models; visualize drift and retrieval deltas.
-* **EDP (Enterprise Data Pipeline)** — ingestion/validation to dataset release with schema contracts. Stack: Apache Beam, Spark, Ray, Kafka.
+* **Pattern**: FastAPI + Prometheus + Docker + LLM integration for dynamic content.
+* **Implementation**: `docker-compose up`, `/metrics` endpoint, request IDs, middleware timing, health/readiness probes.
+* **Evidence**: Prometheus metrics, structured logs, CI/CD via GitHub Actions.
+* **Start here**: `simple-model-apil/README.md`
 
 ---
 
@@ -241,12 +261,12 @@ graph LR
 
 ## About me
 
-I come from **linguistics/philosophy/translation** (B.Sc. Technical‑Scientific Translation, B.Ed. English Language Teaching). I use that symbolic lens to design reliable NLP systems: clear problem framing, careful retrieval/representation choices, and evaluation you can trust.
+I come from **linguistics and translation** (B.Sc. Technical‑Scientific Translation, B.Ed. English Language Teaching). I use that symbolic lens to design reliable NLP systems: clear problem framing, careful retrieval/representation choices, and evaluation you can trust.
 
-Most recently at **Spotify** (Sep 2024 – Jul 2025) as Data Scientist on Customer Experience & Privacy, where I architected privacy‑compliant NLP pipelines, delivered semantic retrieval capabilities, and partnered with Legal/Ops to turn policy into system guarantees.
+Most recently at **Spotify** (Sep 2024 – Jul 2025) as Data Scientist on Customer Experience & Privacy, where I designed privacy‑compliant NLP pipelines (classification, semantic retrieval with FAISS), partnered with Legal/Ops to translate regulation into system constraints, and prototyped a symbolic‑LLM hybrid reviewer for auditing model behavior.
 
 Currently based in **Buenos Aires, Argentina**.
 
 * **GitHub:** [github.com/naaas94](https://github.com/naaas94)
-* **LinkedIn:** [linkedin.com/in/alejandroa-garay](https://www.linkedin.com/in/alejandroa-garay/)
+* **LinkedIn:** [linkedin.com/in/alejandro-garay-frontini](https://www.linkedin.com/in/alejandro-garay-frontini/)
 * **Email:** alejandroa.garay.ag@gmail.com
