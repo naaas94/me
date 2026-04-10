@@ -21,11 +21,9 @@
 | ---------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Local‑first LLM ingestion + semantic search    | **SnR QuickCapture**                  | Neural parsing, hybrid SQLite+FAISS, deterministic normalizer, 99 tests | `snr-qc/README.md`                                                      |
 | Signal accumulation + LLM narrative synthesis  | **Quality Intelligence (QI)**         | Feature engineering, rolling stats, Pydantic‑validated LLM output       | `qi/README.md`                                                           |
-| Ingestion → Train → Evaluate → Serve → Monitor | **Model Training Pipeline (MTP)**     | Intelligent dataset monitoring, GCS model registry, hyperparameter opt  | `mtp/README.md`                                                          |
 | NL→SQL with safety & multi‑tenancy            | **Retail Copilot**                    | Intent taxonomy, SQL templates, validation rules, golden‑set evals      | `retail-copilot/README.md` → `SOW_Dossier.md`                           |
 | Post‑hoc guardrails / semantic auditing        | **Agentic Reviewer**                  | LLM verdict+reasoning loop, prompt‑injection detection, audit logging   | `agentic-reviewer/README.md` → `demo.py`                                |
 | Productionized text classification             | **Privacy Case Classifier (PCC)**     | Live BigQuery pipeline, Looker dashboard, GCS model ingestion           | `pcc/README.md`                                                          |
-| Observability for LLM APIs                     | **Simple Model API (SMA)**            | Prometheus metrics (RPS, P50/P95), structured logs, Docker              | `simple-model-apil/README.md` → `Makefile`                              |
 
 ---
 
@@ -42,13 +40,7 @@ flowchart LR
     QI[QI – Quality Intelligence<br/>CLI + LLM synthesis]
   end
 
-  subgraph Build ["Build & Train"]
-    MTP[MTP – Model Training Pipeline]
-    REG[Model Registry / GCS]
-  end
-
   subgraph Serving ["Serving & Apps"]
-    SMA[Simple Model API]
     RC[Retail Copilot<br/>NL→SQL + guardrails]
     PCC[PCC Classifier<br/>BigQuery + Looker]
     AR[Agentic Reviewer<br/>semantic auditing]
@@ -60,14 +52,12 @@ flowchart LR
   end
 
   QC -- notes --> QI
-  SRC --> MTP --> REG --> SMA
   SRC --> PCC
   PCC --> LOGS
-  SMA --> LOGS
   RC --> LOGS
-  SMA --> AR
+  AR --> LOGS
   RC --> AR
-  MTP --> EVAL
+  PCC --> EVAL
   RC --> EVAL
 ```
 
@@ -229,21 +219,10 @@ graph LR
 * **Evidence**: live production BigQuery tables with daily inference, Looker dashboard ([link](https://lookerstudio.google.com/reporting/9cb78e63-f5a4-4c5b-95b2-3056171628a6/page/SuJRF)), automatic GCS model ingestion with version management, 95%+ confidence scores.
 * **Start here**: `pcc/README.md`
 
-### 6) MTP — Model Training Pipeline
+### Other repos (supporting / reference)
 
-* **Problem**: reproducible training with experiment tracking, model registries, and conditional retraining.
-* **Pattern**: intelligent dataset monitoring (only trains on new data) → SMOTE balancing → hyperparameter optimization → GCS model versioning → registry tracking.
-* **Stack**: scikit‑learn, GCS, YAML config, Kubernetes job templates.
-* **Evidence**: model registry CLI, GCS versioned artifacts, random‑search optimization, dataset date tracking.
-* **Start here**: `mtp/README.md`
-
-### 7) SMA — Simple Model API
-
-* **Problem**: serve models with SLAs and visibility.
-* **Pattern**: FastAPI + Prometheus + Docker + LLM integration for dynamic content.
-* **Implementation**: `docker-compose up`, `/metrics` endpoint, request IDs, middleware timing, health/readiness probes.
-* **Evidence**: Prometheus metrics, structured logs, CI/CD via GitHub Actions.
-* **Start here**: `simple-model-apil/README.md`
+* **MTP** (`mtp/`) — sklearn training pipeline with dataset gates, hyperparameter search, and GCS model registry; useful as a generic train/eval scaffold.
+* **SMA** (`simple-model-api/`) — FastAPI + Prometheus + Docker serving template with `/metrics` and structured logs.
 
 ---
 
