@@ -34,7 +34,7 @@ Reproducibility by construction: every run is bound to a content-addressed `cont
 
 Optimization underneath: streaming I/O (openpyxl read-only in 50-row batches; PDF pages released one at a time), bounded `ThreadPoolExecutor` for cloud providers (sequential for local), per-worker SQLite connections in WAL mode, content-hash job deduplication, `--resume` after crash or interrupt without re-normalization.
 
-→ [`hermes/`](./Hermes)
+→ [`hermes/`](./Hermes/README.md)
 
 ---
 
