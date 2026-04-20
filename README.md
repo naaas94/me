@@ -22,7 +22,7 @@ Multi-agent architecture (supervisor delegating to specialised ingestion, entity
 
 FastAPI surface with MCP tool access and A2A agent delegation. Hardening: API-key + bearer auth, A2A shared secret, body-size middleware, Pydantic v2 strict contracts with schema versioning, production-mode `/docs` disable. Layered evaluation — unit, integration, golden-set YAML (retrieval / trace / contract / edge / security), E2E, security audit, agent-trajectory analysis, JSONL eval store. CI matrix on Py 3.12 / 3.13 plus nightly live-stack runs.
 
-→ [`aria/`](./aria/README.md)
+→ [`aria/`](./ARIA/README.md)
 
 ### Hermes — Schema-Bound LLM Document Extraction
 
@@ -34,7 +34,7 @@ Reproducibility by construction: every run is bound to a content-addressed `cont
 
 Optimization underneath: streaming I/O (openpyxl read-only in 50-row batches; PDF pages released one at a time), bounded `ThreadPoolExecutor` for cloud providers (sequential for local), per-worker SQLite connections in WAL mode, content-hash job deduplication, `--resume` after crash or interrupt without re-normalization.
 
-→ [`hermes/`](./hermes/README.md)
+→ [`hermes/`](./Hermes)
 
 ---
 
