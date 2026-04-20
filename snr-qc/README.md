@@ -23,9 +23,9 @@ Press `Alt+Space` anywhere on Windows, type a thought, and QuickCapture parses i
 
 1. **Capture** -- Press `Alt+Space` to summon a minimal overlay bar. Type a thought and hit Enter.
 2. **Normalize** -- The input is canonicalized (Unicode, whitespace, quotes), and deterministic features are extracted: directives (`todo:`, `idea:`, ...), tag headers (`python, ml: ...`), and metrics (`m 2`, `days 0-14`).
-3. **Parse** -- If the normalizer is confident enough (tags + directive present, confidence >= 0.7), the LLM is skipped entirely. Otherwise, a local LLM (Ollama, `qwen3:0.6b` by default) extracts tags, sentiment, entities, intent, action items, and a summary.
+3. **Parse** -- If the normalizer is confident enough (tags + directive present, confidence >= 0.7), the LLM is skipped entirely. Otherwise, a local LLM (Ollama, `qwen3.5:9b` by default) extracts tags, sentiment, entities, intent, action items, and a summary.
 4. **Embed & Store** -- A `SentenceTransformer` (`all-MiniLM-L6-v2`, 384-dim) generates an embedding. The note and its vector are stored atomically in SQLite and FAISS.
-5. **Search** -- Semantic search over all stored notes via the `/search` endpoint or (planned) in-launcher search mode.
+5. **Search** -- Semantic search via `GET /search`, or use the launcher’s **Search** mode (Capture / Search toggle) to query in the overlay without changing the capture hotkey path.
 
 ## Quick Start
 
@@ -43,7 +43,7 @@ cd snr-quickcapture
 pip install -r requirements.txt
 
 # Pull the default LLM model
-ollama pull qwen3:0.6b
+ollama pull qwen3.5:9b
 ```
 
 ### Running
@@ -120,20 +120,23 @@ QuickCapture runs as two cooperating processes on `localhost`:
 FastAPI server that holds all ML models in memory for fast inference:
 
 - **SentenceTransformer** (`all-MiniLM-L6-v2`) for embedding generation
-- **Ollama** connection for LLM parsing (`qwen3:0.6b`)
+- **Ollama** connection for LLM parsing (`qwen3.5:9b`)
 - SQLite + FAISS storage engine
+- Shared normalize → parse → persist path via **`scripts/processing_pipeline.py`** (same pipeline as batch processing)
 - Background threads: hourly heartbeat, 4-hour offline sync
 - Bounded thread pool for LLM work with timeout accounting
+- Default data paths (`storage/`, `logs/`, backups) resolve from the **repository root** via `scripts/paths.py` (not the process working directory)
 
 ### Launcher (`scripts/launcher.py`)
 
 Lightweight PyQt6 desktop overlay:
 
-- Frameless, translucent, always-on-top 700x100px bar
+- Frameless, translucent, always-on-top bar (expands in **Search** mode for results)
+- **Capture / Search** toggle: Search mode calls `GET /search` with the same Brain auth headers as capture and lists hits (distance, metric, summary, tags, date)
 - `Alt+Space` global hotkey via `keyboard` library
 - Periodic hotkey re-registration (every 30s) for sleep/wake resilience
-- Optimistic UI: input clears and window hides immediately on submit
-- Offline fallback: saves to `storage/offline_notes.jsonl` when the Brain is unreachable
+- Optimistic UI: input clears and window hides immediately on submit (capture mode)
+- Offline fallback: saves to `storage/offline_notes.jsonl` when the Brain is unreachable (atomic append via temp + rename)
 - Health checks every 60 seconds with color-coded status feedback
 
 ## Processing Pipeline
@@ -166,13 +169,17 @@ When the normalizer's confidence is too low, the `NeuralParser` calls Ollama wit
 
 Deterministic tags from the normalizer always take priority over LLM-suggested tags via `merge_tags()`.
 
+### Shared processing path (`scripts/processing_pipeline.py`)
+
+Server (`/capture`, offline sync, single-entry helpers) and **`scripts/batch_processor.py`** both call this module so normalization, LLM timeouts, and persistence stay consistent across API and scheduled batch runs.
+
 ### Storage Engine (`scripts/storage_engine.py`)
 
 Hybrid storage system:
 
 - **SQLite** -- structured data with WAL mode, thread-local connections
-- **FAISS** -- `IndexFlatL2` with `IndexIDMap`, 384 dimensions, persisted to disk
-- **Embedding** -- generated via `all-MiniLM-L6-v2` (CPU or GPU, auto-detected)
+- **FAISS** -- `IndexFlatL2` with `IndexIDMap`, 384 dimensions, persisted to disk (vector mutations and `id_map` I/O are serialized for thread safety)
+- **Embedding** -- generated via `all-MiniLM-L6-v2` (CPU or GPU, auto-detected); vectors are persisted as **EmbeddingBlob v1** in SQLite (not pickle). Use `scripts/migrate_database.py` to convert legacy databases.
 - **Tag statistics** -- usage counts, avg confidence, avg semantic density
 - **Dead letter queue** -- notes that exhaust all retries
 
@@ -188,18 +195,23 @@ Hybrid storage system:
 
 ## API Reference
 
-The Brain serves at `http://127.0.0.1:8000`. No authentication (localhost only).
+The Brain serves at `http://127.0.0.1:8000`.
+
+### Authentication (optional)
+
+By default the API is open on localhost. Set **`BRAIN_API_TOKEN`** to a non-empty value to require the **`X-Brain-Token`** header on requests. The launcher reads the same env var and sends the header automatically; use the header with `curl` or other clients when auth is enabled.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/capture` | Capture and process a note |
-| `GET` | `/search` | Semantic vector search |
+| `GET` | `/search` | Semantic vector search (hits include `distance` and `metric`) |
+| `POST` | `/ask` | Natural-language **read**: structured query plan from Ollama, compiled to parameterized `SELECT` on a read-only SQLite connection (see below) |
 | `GET` | `/health` | System health with memory, LLM runtime, and stats |
 | `GET` | `/stats` | Database and tag statistics |
 | `GET` | `/pending` | Raw notes still pending processing |
 | `GET` | `/failed` | Failed notes eligible for retry |
 | `GET` | `/dlq` | Dead letter queue entries |
-| `POST` | `/retry/{id}` | Re-process a failed raw note |
+| `POST` | `/retry/{id}` | Re-process the **existing** failed `raw_notes` row (no duplicate raw row) |
 
 ### POST /capture
 
@@ -207,6 +219,7 @@ The Brain serves at `http://127.0.0.1:8000`. No authentication (localhost only).
 curl -X POST http://127.0.0.1:8000/capture \
   -H "Content-Type: application/json" \
   -d '{"text": "python, ml: Implemented transformer for text classification"}'
+# When BRAIN_API_TOKEN is set, add: -H "X-Brain-Token: …"
 ```
 
 Response (single entry):
@@ -230,9 +243,22 @@ Multi-entry inputs (separated by `---`, `***`, or `===`) return `entry_count`, `
 
 ```bash
 curl "http://127.0.0.1:8000/search?query=machine+learning&limit=5"
+# With Brain auth enabled:
+curl "http://127.0.0.1:8000/search?query=machine+learning&limit=5" \
+  -H "X-Brain-Token: $BRAIN_API_TOKEN"
 ```
 
-Returns notes ranked by semantic similarity (L2 distance in embedding space).
+Returns notes ranked by **Euclidean L2** distance in embedding space. Each hit includes **`distance`** (lower is nearer) and **`metric`: `"l2"`** (FAISS reports squared L2 internally; the API exposes true L2). Older clients that assumed a dummy **`score`** field should use **`distance`** / **`metric`** instead.
+
+### POST /ask
+
+Send a JSON body with a **`question`** string. Ollama returns a validated structured plan (allowlisted tables/columns, row cap); the server compiles it to parameterized `SELECT` only and runs it read-only. Arbitrary SQL from the model is not executed, and `notes.embedding_vector` is not exposed through this API.
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How many notes tagged python?"}'
+```
 
 ### GET /health
 
@@ -254,10 +280,10 @@ QuickCapture is designed around the principle: **never lose a note**.
 |-------|-----------|---------|
 | 1 | Raw note capture | Every input → `raw_notes` table *before* processing |
 | 2 | Offline fallback | Brain unreachable → `storage/offline_notes.jsonl` |
-| 3 | Offline sync | Background thread syncs JSONL → database every 4 hours |
+| 3 | Offline sync | Background thread syncs JSONL → database every 4 hours (offline file rewrites are atomic: temp + rename) |
 | 4 | Retry | Failed notes can be retried via `/retry/{id}` or batch processor |
 | 5 | Dead letter queue | After max retries → DLQ with full stack trace for manual review |
-| 6 | Emergency backup | Database failure → `storage/emergency_backup.jsonl` |
+| 6 | Emergency backup | Database failure → `storage/emergency_backup*.jsonl` (runtime spill files) |
 
 ### Note lifecycle
 
@@ -289,6 +315,7 @@ pending → processing → completed
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `BRAIN_API_TOKEN` | *(unset)* | If set and non-empty, requires `X-Brain-Token` on Brain HTTP requests (launcher sends it automatically) |
 | `QUICKCAPTURE_PARSE_WORKERS` | `4` | Max background parser threads in the Brain |
 | `QUICKCAPTURE_LLM_TIMEOUT_SECONDS` | `240` | Per-attempt LLM parse timeout |
 | `QUICKCAPTURE_LLM_TIMEOUT_ATTEMPTS` | `1` | Max parse attempts per entry |
@@ -296,6 +323,7 @@ pending → processing → completed
 | `QUICKCAPTURE_OLLAMA_KEEP_ALIVE` | *(none)* | Ollama model residency hint |
 | `QUICKCAPTURE_OLLAMA_NUM_CTX` | *(none)* | Ollama context size override |
 | `QUICKCAPTURE_OLLAMA_NUM_PREDICT` | *(none)* | Ollama output token cap |
+| `RAW_NOTES_RETENTION_DAYS` | `90` | Retention window for completed `raw_notes` when running `scripts/raw_notes_retention.py` (see script `--help`) |
 
 ### YAML config files (`config/`)
 
@@ -327,10 +355,12 @@ Health data is surfaced through the `/health` endpoint and logged to `logs/brain
 | `quick-add` | `scripts/quick_add.py` | Legacy CLI for adding notes without the launcher |
 | `review-outliers` | `scripts/review_outliers.py` | Interactive review and correction of low-quality notes |
 | batch processor | `scripts/batch_processor.py` | Process pending notes, retry failures, sync offline backup |
+| migrate database | `scripts/migrate_database.py` | Schema upgrades; optional **`--migrate-tags`** / **`--tag-dry-run`** to normalize stored tags (backs up by default) |
+| raw notes retention | `scripts/raw_notes_retention.py` | Policy purge of **completed** old `raw_notes` (default dry-run; **`--execute`** requires backup — see script help) |
 
 ### Batch processor
 
-Designed for scheduled runs (e.g., cron):
+Designed for scheduled runs (e.g., cron). Raw-note retention is a **separate** job (not invoked automatically from the batch processor):
 
 ```bash
 python scripts/batch_processor.py               # Process everything
@@ -341,15 +371,29 @@ python scripts/batch_processor.py --sync-only    # Only sync offline JSONL
 
 ## Testing
 
+CI (`.github/workflows/ci.yml`) installs `pip install -r requirements.txt` then **`pip install -e ".[ci]"`** or **`".[dev]"`** and runs:
+
 ```bash
-# Run all tests
+pytest -m "not heavy" --tb=short -q
+```
+
+Slow or opt-in suites may be marked **`heavy`**; some concurrency tests use **`threading`**. Locally:
+
+```bash
+pip install -r requirements.txt
+pip install -e ".[dev]"   # or ".[ci]" for a lighter extra set
+
+# Default full run (excludes heavy)
+pytest -m "not heavy" tests/
+
+# Everything including heavy
 pytest tests/
 
 # With coverage report
-pytest tests/ --cov=scripts --cov=observability --cov-report=html
+pytest -m "not heavy" tests/ --cov=scripts --cov=observability --cov-report=html
 
-# Specific suites
-pytest tests/test_normalizer.py -v          # 99 normalization tests
+# Examples
+pytest tests/test_normalizer.py -v          # Normalization tests
 pytest tests/test_basic_functionality.py -v  # Core pipeline tests
 pytest tests/test_runtime_reliability.py -v  # Hotkey, health, runtime tests
 pytest tests/test_observability.py -v        # Observability subsystem tests
@@ -363,17 +407,23 @@ snr-quickcapture/
 ├── scripts/                       # Core application
 │   ├── server.py                  # FastAPI Brain (backend)
 │   ├── launcher.py                # PyQt6 overlay (frontend)
+│   ├── brain_auth.py              # Optional X-Brain-Token / BRAIN_API_TOKEN
+│   ├── paths.py                   # Repository root resolution for storage/logs
+│   ├── processing_pipeline.py     # Shared normalize → parse → persist
 │   ├── normalizer.py              # Deterministic normalization pipeline
 │   ├── parse_input.py             # NeuralParser (Ollama LLM)
+│   ├── nl_ask.py                  # NL read path (structured plan → read-only SQL)
+│   ├── nl_ask_prompts.py          # Prompts for /ask
 │   ├── validate_note.py           # Multi-dimensional validation
 │   ├── storage_engine.py          # SQLite + FAISS hybrid storage
 │   ├── models.py                  # Data models (ParsedNote, etc.)
 │   ├── tag_intelligence.py        # Tag suggestions and drift detection
 │   ├── batch_processor.py         # Scheduled batch processing
+│   ├── raw_notes_retention.py     # Optional completed raw_notes retention job
 │   ├── review_outliers.py         # Outlier review CLI
 │   ├── snr_preprocess.py          # SNR export preprocessing
 │   ├── quick_add.py               # Legacy CLI entry point
-│   ├── migrate_database.py        # Schema migration script
+│   ├── migrate_database.py        # Schema migration + optional tag migration
 │   └── kill_port.py               # Port cleanup utility
 │
 ├── observability/                 # Monitoring subsystem
@@ -389,39 +439,50 @@ snr-quickcapture/
 │   ├── semantic_validation.yaml
 │   └── grammar_rules.yaml
 │
-├── storage/                       # Runtime data (gitignored except schema)
+├── storage/                       # Runtime data (mostly gitignored)
 │   ├── quickcapture.db            # SQLite database
 │   ├── vector_store/              # FAISS index + ID map
+│   ├── backups/                   # Pre-migration / retention backups (gitignored)
 │   ├── offline_notes.jsonl        # Offline capture fallback
-│   └── emergency_backup.jsonl     # Emergency DB-failure fallback
+│   └── emergency_backup*.jsonl    # Emergency DB-failure fallback
 │
 ├── logs/                          # Application logs
 │   ├── brain.log
 │   └── launcher.log
 │
-├── tests/                         # Test suite
-│   ├── test_normalizer.py         # 99 normalization tests
+├── tests/                         # Test suite (markers: heavy, threading)
+│   ├── test_normalizer.py
 │   ├── test_basic_functionality.py
-│   ├── test_observability.py
-│   ├── test_failed_notes.py
-│   └── test_runtime_reliability.py
+│   ├── test_capture_http.py
+│   ├── test_nl_ask_readonly_plan.py
+│   ├── test_processing_pipeline_rule_only.py
+│   └── …                          # Additional modules (search, auth, retention, FAISS lock, …)
 │
-├── qc-documentation/              # Detailed system documentation (14 docs)
+├── .github/workflows/
+│   └── ci.yml                     # Push/PR: Python 3.11–3.12 × ci/dev extras
+│
 ├── debugging/                     # Debug and diagnostic scripts
 │
 ├── start_quickcapture.bat         # Windows startup script
-├── pyproject.toml                 # Python project config
+├── pyproject.toml                 # Python project config (extras: ci, dev)
 ├── requirements.txt               # Dependencies
-└── CHANGELOG.md                   # Version history
+├── CHANGELOG.md                   # Version history
+└── api_flow.md                    # API / pipeline flow reference
 ```
+
+Backlog plans and decision logs for larger efforts may live under **`.dev/plans/`** in a developer checkout (most of `.dev/` is gitignored by default).
 
 ## Roadmap
 
-Planned features (see `quicklauncher_query_roadmap.md` for details):
+**Shipped in recent work:**
 
-- **Launcher search mode** -- Toggle between capture and search in the overlay bar
-- **NL-to-query endpoint** (`POST /ask`) -- Natural language questions answered via LLM-driven query routing or safe read-only SQL
-- **In-launcher result display** -- Show search results and NL answers directly in the quick bar
+- **Launcher search mode** -- Capture / Search toggle with in-overlay `GET /search` results
+- **`POST /ask`** -- Natural-language reads via validated structured plans and read-only SQL (not arbitrary model SQL)
+
+**Still open (examples):**
+
+- **In-launcher NL answers** -- Show `/ask` results in the quick bar (capture/search HTTP paths unchanged until then)
+- **Async capture** -- Decouple capture latency from LLM work (see project backlog / decision logs)
 
 ## Tech Stack
 
@@ -430,13 +491,14 @@ Planned features (see `quicklauncher_query_roadmap.md` for details):
 | Language | Python 3.11+ |
 | Backend | FastAPI, Uvicorn |
 | Frontend | PyQt6, `keyboard` |
-| LLM | Ollama (`qwen3:0.6b`) |
+| LLM | Ollama (`qwen3.5:9b`) |
 | Embeddings | SentenceTransformers (`all-MiniLM-L6-v2`) |
 | Database | SQLite (WAL mode) |
 | Vector store | FAISS (`IndexFlatL2`, 384-dim) |
 | Metrics | Prometheus client |
 | Logging | structlog |
 | ML stack | PyTorch, scikit-learn |
+| CI | GitHub Actions (Python 3.11 / 3.12, `ci` / `dev` extras) |
 
 ---
 
