@@ -77,5 +77,5 @@ Forecasting, capacity planning, analytical reporting, and operational tooling fo
 ## Contact
 
 **GitHub:** [naaas94](https://github.com/naaas94)
-**LinkedIn:** [alejandro-garay-frontini](https://www.linkedin.com/in/alejandro-garay-frontini/)
+**LinkedIn:** [alejandro-garay-frontini](https://www.linkedin.com/in/alejandroa-garay/)
 **Email:** alejandroa.garay.ag@gmail.com
